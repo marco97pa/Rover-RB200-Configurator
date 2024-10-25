@@ -1,1 +1,1 @@
-pyinstaller --onefile --icon=icon.ico --noconsole main.py
+pyinstaller --clean -y -n "Rover RB200 Configurator" --add-data=".\icon.ico;." --icon=".\icon.ico" --onefile --noconsole .\main.py

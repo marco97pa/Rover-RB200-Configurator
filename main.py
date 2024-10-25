@@ -8,6 +8,7 @@ import time
 import json
 import tkinter as tk
 from tkinter import ttk
+import sys
 
 def get_status(IP):
     url = 'http://' + IP + '/data.json'
@@ -172,7 +173,10 @@ def countdown(time_left):
 # Create the main window
 root = tk.Tk()
 root.title("ROVER RB200 Configurator")
-root.iconbitmap("icon.ico")
+if getattr(sys, 'frozen', False):
+    root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
+else:
+    root.iconbitmap("icon.ico")
 
 # Function to launch webpage
 def webpage():
