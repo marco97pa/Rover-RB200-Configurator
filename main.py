@@ -17,12 +17,12 @@ updating = False
 
 def get_status(IP):
     snmp_data = get_snmp_data(IP)
-    return snmp_data["Frequency"], snmp_data["Frequency"], snmp_data["Level"], snmp_data["SNR"], snmp_data["ISI"]
+    return snmp_data["Bitrate"], snmp_data["Frequency"], snmp_data["Level"], snmp_data["SNR"], snmp_data["ISI"]
     
 def get_snmp_data(ip_address):
     community = 'public'  # Replace with your SNMP community string
     oids = {
-
+        '.1.3.6.1.4.1.19324.2.3.3.3.17.1.7.1':'Bitrate',
         '.1.3.6.1.4.1.19324.2.3.3.3.3.0': 'Frequency',
         '.1.3.6.1.4.1.19324.2.3.3.2.14.1.2.1': 'ISI',
         '.1.3.6.1.4.1.19324.2.3.3.3.4.0': 'Level',
@@ -54,6 +54,9 @@ def get_snmp_data(ip_address):
                     value = str( float(value)/10 ) + " dBuV"
                 elif name == "SNR":
                     value = str( float(value)/10 ) + " dB"
+                elif name == "Bitrate":
+                    value = str( float(value)/1000000 ) + " Mb/s"
+
                 results[name] = value
 
     return results
@@ -64,7 +67,7 @@ def check_bitrate(data):
         number_str = data.split()[0]
         # Convert the string to a float
         number_float = float(number_str)
-        
+                
         # Check if the value is between 18 and 38
         if 18 <= number_float <= 38:
             return True
@@ -233,12 +236,12 @@ def on_closing():
 
 # Create the main window
 root = tk.Tk()
-root.title("ROVER RB200 Configurator - ver. 1.2")
+root.title("ROVER RB200 Configurator - ver. 1.3")
 root.protocol("WM_DELETE_WINDOW", on_closing)
 if getattr(sys, 'frozen', False):
     root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
-else:
-    root.iconbitmap("icon.ico")
+# else:
+    # root.iconbitmap("icon.ico") ------------------------ commentato
 
 # Function to launch webpage
 def webpage():
@@ -251,8 +254,11 @@ def update_status():
     while updating:
         IP = inputIP.get()
         if is_valid_ip(IP):
+            
             bitrate, freq, level, snr, isi = get_status(IP)
-            labelBitrate.config(text = bitrate)
+            
+            labelBitrate.config(text = "Bitrate:\t{}".format(bitrate) )
+            #labelBitrate.config(text = number_float)
             if check_bitrate( bitrate ):
                 labelBitrate.config(fg = "green")
             else:
