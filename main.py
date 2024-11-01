@@ -8,65 +8,56 @@ import time
 import json
 import tkinter as tk
 from tkinter import ttk
-import sys
+import sys, os
+from pysnmp.hlapi import *
+import threading
+
+# Initialize the flag
+updating = False
 
 def get_status(IP):
-    url = 'http://' + IP + '/data.json'
-    headers = {
-        'Accept': '*/*',
-        'Accept-Language': 'it,it-IT;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'Connection': 'keep-alive',
-        'Referer': 'http://10.222.29.131/status.html',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0'
+    snmp_data = get_snmp_data(IP)
+    return snmp_data["Frequency"], snmp_data["Frequency"], snmp_data["Level"], snmp_data["SNR"], snmp_data["ISI"]
+    
+def get_snmp_data(ip_address):
+    community = 'public'  # Replace with your SNMP community string
+    oids = {
+
+        '.1.3.6.1.4.1.19324.2.3.3.3.3.0': 'Frequency',
+        '.1.3.6.1.4.1.19324.2.3.3.2.14.1.2.1': 'ISI',
+        '.1.3.6.1.4.1.19324.2.3.3.3.4.0': 'Level',
+        '.1.3.6.1.4.1.19324.2.3.3.3.5.0': 'SNR'
     }
 
-    json_data = ""
-    max_retries = 10
-    retry_delay = 2  # seconds
+    results = {}
 
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(url, headers=headers, verify=False)
-            print(response.text)
-            json_data = response.text
-            break  # Exit the loop if the request is successful
-        except (requests.exceptions.ConnectionError) as e:
-            print(f"Connection error occurred: {e}.", end=" ")
-            try:
-                if len(e.args) > 0 and type(e.args[0]) is ProtocolError and isinstance(e.args[0].args[1], RemoteDisconnected):
-                    print(f" Retrying ({attempt + 1}/{max_retries})...")
-                    time.sleep(retry_delay)
-                else:
-                    break  # Exit the loop if a different error occurs
-            except (IndexError, AttributeError):
-                break  # Exit the loop if a different error occurs
-            print()           
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
-            break  # Exit the loop if a different error occurs
-    else:
-        print("Failed to retrieve the data after multiple attempts.")
+    for oid, name in oids.items():
+        errorIndication, errorStatus, errorIndex, varBinds = next(
+            getCmd(SnmpEngine(),
+                   CommunityData(community),
+                   UdpTransportTarget((ip_address, 161)),
+                   ContextData(),
+                   ObjectType(ObjectIdentity(oid)))
+        )
 
-    # Parse JSON data
-    if json_data != "":
-        data = json.loads(json_data)
+        if errorIndication:
+            results[name] = str(errorIndication)
+        elif errorStatus:
+            results[name] = '%s at %s' % (errorStatus.prettyPrint(),
+                                          errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+        else:
+            for varBind in varBinds:
+                value = varBind[1].prettyPrint()
+                if name == "Frequency":
+                    value = str( float(value)/100 ) + " MHz"
+                elif name == "Level":
+                    value = str( float(value)/10 ) + " dBuV"
+                elif name == "SNR":
+                    value = str( float(value)/10 ) + " dB"
+                results[name] = value
 
-        # Extract the value
-        for item in data:
-            if item.get('par') == 'id177':
-                bitrate = item.get('val')
-            if item.get('par') == 'id3':
-                freq = item.get('val')
-            if item.get('par') == 'id116':
-                level = item.get('val')
-            if item.get('par') == 'id125':
-                snr = item.get('val')
-
-        print(bitrate)
-        return bitrate, freq, level, snr
-    else:
-        return "Non connesso", "", "", ""
-
+    return results
+    
 def check_bitrate(data):
     try:
         # Split the string and take the first part
@@ -122,14 +113,86 @@ def set_PLS(IP):
             if attempts == max_retries:
                 print("Max retries reached. Exiting.")
                 break
-            
+
+def set_Profile(IP, profile):
+    # URL for the GET request
+    url = "http://" + IP + "/conf_sys.html?270=Load+Profile+" + profile
+    max_retries = 10
+    attempts = 0
+    
+    while attempts < max_retries:
+        try:
+            # Send the GET request
+            response = requests.get(url)
+            # Print the response status code and content
+            print(f"Set Profile: Status Code: {response.status_code}")
+            break  # Exit the loop if the request is successful
+        except (RemoteDisconnected, ProtocolError, ConnectionError,ChunkedEncodingError) as e:
+            attempts += 1
+            print(f"Error: {e}. Retrying... ({attempts}/{max_retries})")
+            if attempts == max_retries:
+                print("Max retries reached. Exiting.")
+                break
+
+def gateway(ip_address):
+    # Split the IP address into its components
+    parts = ip_address.split('.')
+    
+    # Replace the last part with '1'
+    parts[-1] = '1'
+    
+    # Join the parts back together
+    modified_ip = '.'.join(parts)
+    
+    return modified_ip
+
+
+def set_NTP(IP, NTP):
+    # URL for the GET request
+    url = "http://" + IP + "/conf_sys.html?267=NTP&258=" + NTP + "&259=1+h"
+    max_retries = 10
+    attempts = 0
+    
+    while attempts < max_retries:
+        try:
+            # Send the GET request
+            response = requests.get(url)
+            # Print the response status code and content
+            print(f"Set NTP: Status Code: {response.status_code}")
+            break  # Exit the loop if the request is successful
+        except (RemoteDisconnected, ProtocolError, ConnectionError,ChunkedEncodingError) as e:
+            attempts += 1
+            print(f"Error: {e}. Retrying... ({attempts}/{max_retries})")
+            if attempts == max_retries:
+                print("Max retries reached. Exiting.")
+                break
+
+def set_IP(IP, NewIP):
+    # URL for the GET request
+    url = "http://" + IP + "/conf_sys.html?244=" + NewIP + "&245=255.255.255.000&246=" + gateway(NewIP)
+    max_retries = 5
+    attempts = 0
+    
+    while attempts < max_retries:
+        try:
+            # Send the GET request
+            response = requests.get(url)
+            # Print the response status code and content
+            print(f"Set IP: Status Code: {response.status_code}")
+            break  # Exit the loop if the request is successful
+        except (RemoteDisconnected, ProtocolError, ConnectionError,ChunkedEncodingError) as e:
+            attempts += 1
+            print(f"Error: {e}. Retrying... ({attempts}/{max_retries})")
+            if attempts == max_retries:
+                print("Max retries reached. Exiting.")
+                break
 
 def set_RX(IP, ol, freq, pol, symb, profile):
     # URL for the GET request
-    url = "http://" + IP + "/conf_sat.html?2=" + ol + "+MHz&5=DVB-S2&9=Auto+Symbolrate&3=" + freq + "+MHz&6=" + pol + "&7=OFF&8=0+dB&4=" + symb + "+kS%2Fs&15=Loop&10=MIS&61=AUTO&270=Save+as+Profile+" + profile + "&294=REBOOT_ALL"
+    url = "http://" + IP + "/conf_sat.html?2=" + ol + "+MHz&5=DVB-S2&9=Auto+Symbolrate&3=" + freq + "+MHz&6=" + pol + "&7=OFF&8=0+dB&4=" + symb + "+kS%2Fs&15=Loop&10=MIS&61=AUTO&270=Save+as+Profile+" + profile + ""
     print(url)
     
-    max_retries = 5
+    max_retries = 15
     attempts = 0
     timeout_seconds = 7 
     
@@ -160,19 +223,18 @@ def is_valid_ip(ip):
     else:
         return False
 
-def countdown(time_left):
-    if time_left > 0:
-        label3.config(text=f"Attendi {time_left:02} secondi")
-        root.after(1000, countdown, time_left - 1)
-    else:
-        update_status()
-        label3.config(text=" ")
-
-
+def on_closing():
+    # Gracefully close
+    if updating:
+        toggle_update()
+    print("Window is closing")
+    root.destroy()
+    root.after(100, os._exit, 0)  # Delay the exit slightly
 
 # Create the main window
 root = tk.Tk()
-root.title("ROVER RB200 Configurator")
+root.title("ROVER RB200 Configurator - ver. 1.2")
+root.protocol("WM_DELETE_WINDOW", on_closing)
 if getattr(sys, 'frozen', False):
     root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
 else:
@@ -184,22 +246,56 @@ def webpage():
     if is_valid_ip(IP):
         webbrowser.open("http://" + IP)
 
-# Function to update the bitrate label text
+# Function to update the label text
 def update_status():
-    IP = inputIP.get()
-    if is_valid_ip(IP):
-        bitrate, freq, level, snr = get_status(IP)
-        labelBitrate.config(text = bitrate)
-        if check_bitrate( bitrate ):
-            labelBitrate.config(fg = "green")
+    while updating:
+        IP = inputIP.get()
+        if is_valid_ip(IP):
+            bitrate, freq, level, snr, isi = get_status(IP)
+            labelBitrate.config(text = bitrate)
+            if check_bitrate( bitrate ):
+                labelBitrate.config(fg = "green")
+            else:
+                labelBitrate.config(fg = "red")
+                
+            if level != "":
+                labelStatus.config(text = "Freq.:\t{} (ISI {})\nLivello:\t{}\nSNR:\t{}".format(freq, isi, level, snr) )
         else:
-            labelBitrate.config(fg = "red")
-            
-        if level != "":
-            labelStatus.config(text = "Freq.:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, level, snr) )
+            labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
+            labelStatus.config(text = " ")
+        time.sleep(2)
+
+# Function to start or stop the updates
+def toggle_update():
+    global updating
+    updating = not updating
+    if updating:
+        buttonConnect.config(text = "Disconnetti")
+        labelStatus.config(text = "Connessione in corso...")
+        threading.Thread(target=update_status).start()
     else:
-        labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
+        buttonConnect.config(text = "Connetti")
+        labelBitrate.config(text = " ")
         labelStatus.config(text = " ")
+        # Importante per evitare arrivo di late threads
+        time.sleep(1)
+        labelBitrate.config(text = " ")
+        labelStatus.config(text = " ")
+
+# Function to change IP address of machine
+def change_IP():
+    IP = inputIP.get()
+    IPNew = inputIPNew.get()
+    if is_valid_ip(IPNew) and is_valid_ip(IPNew):
+            set_NTP(IP, gateway(IPNew))
+            set_IP(IP, IPNew)
+            if updating:
+                toggle_update()
+            label3.config(text = "Indirizzo IP cambiato. Ricollegati all'apparato.")
+            labelBitrate.config(text = " ")
+            labelStatus.config(text = " ")
+    else:
+        label3.config(text = "Indirizzo non valido")
 
 # Function to set selected options
 def set_parameters():
@@ -237,80 +333,96 @@ def set_parameters():
         set_RX(IP, ol, freq, pol, symb, nprofile)
     
         label2.config(text=f"Impostato {service} su {profile}")
-        labelBitrate.config(text = "")
-        labelStatus.config(text = "REBOOTING...")
-        countdown(75)
+        labelBitrate.config(text = "...")
+        labelStatus.config(text = "...")
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
 
 # Create a frame for the input text field and button
 frame1 = tk.Frame(root)
-frame1.pack(pady=10)
+frame1.grid(row=0, column=0, sticky="w", pady=10)
 
 # Create the label
 label = tk.Label(frame1, text="Indirizzo IP:")
-label.pack(side=tk.LEFT)
+label.grid(row=0, column=0, padx=5)
 
 # Create an input text field
 inputIP = tk.Entry(frame1)
-inputIP.pack(side=tk.LEFT, padx=5)
+inputIP.grid(row=0, column=1, padx=5)
 
 # Create a button next to the input text field
-buttonConnect = tk.Button(frame1, text="Connetti / Aggiorna", command=update_status)
-buttonConnect.pack(side=tk.LEFT, padx=5)
+buttonConnect = tk.Button(frame1, text="Connetti", command=toggle_update)
+buttonConnect.grid(row=0, column=2, padx=5)
 
 # Create a button next to the input text field
-buttonConnect = tk.Button(frame1, text="Pag. Web", command=webpage)
-buttonConnect.pack(side=tk.LEFT, padx=5)
+buttonWeb = tk.Button(frame1, text="Pag. Web", command=webpage)
+buttonWeb.grid(row=0, column=3, padx=5)
 
 # Create a label on top of the dropdown menus
 labelStatusT = tk.Label(root, text="Stato", anchor="w", font=("Helvetica", 12, "bold"))
-labelStatusT.pack(side=tk.TOP, pady=5, padx=15,  fill=tk.X)
+labelStatusT.grid(row=1, column=0, pady=5, sticky="w")
 
 # Create a label below the input text field and button
 labelBitrate = tk.Label(root, text=" ")
-labelBitrate.pack(pady=5)
+labelBitrate.grid(row=2, column=0, pady=5, columnspan=4, sticky="ew")
 
 # Create a label below the input text field and button
 labelStatus = tk.Label(root, text=" ")
-labelStatus.pack(pady=5)
-        
+labelStatus.grid(row=3, column=0, pady=5, columnspan=4, sticky="ew")
 
 # Create a frame for the drop down menus and button
 frame2 = tk.Frame(root)
-frame2.pack(pady=10)
+frame2.grid(row=4, column=0, sticky="w", pady=10)
 
 # Create a label on top of the dropdown menus
 labelSettings = tk.Label(frame2, text="Configurazioni", anchor="w", font=("Helvetica", 12, "bold"))
-labelSettings.pack(side=tk.TOP, pady=5,  fill=tk.X)
+labelSettings.grid(row=0, column=0, columnspan=3, pady=5, sticky="w")
 
 # Create a label on top of the dropdown menus
 labelSettingsDesc = tk.Label(frame2, text="Seleziona servizi e profili:", anchor="w")
-labelSettingsDesc.pack(side=tk.TOP, pady=5,  fill=tk.X)
+labelSettingsDesc.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
 # Create the first drop down menu
 options1 = ["MUX R", "MUX A", "MUX B"]
 dropdown1 = ttk.Combobox(frame2, values=options1)
-dropdown1.pack(side=tk.LEFT, padx=5)
+dropdown1.grid(row=2, column=0, padx=5)
 
 # Create the second drop down menu
 options2 = ["Profile 1", "Profile 2", "Profile 3"]
 dropdown2 = ttk.Combobox(frame2, values=options2)
-dropdown2.pack(side=tk.LEFT, padx=5)
+dropdown2.grid(row=2, column=1, padx=5)
 
 # Create a button next to the drop down menus
 button2 = tk.Button(frame2, text="Imposta", command=set_parameters)
-button2.pack(side=tk.LEFT, padx=5)
+button2.grid(row=2, column=2, padx=5)
 
 # Create a label below
-label2 = tk.Label(root, text=" ")
-label2.pack(pady=10)
+label2 = tk.Label(frame2, text=" ")
+label2.grid(row=3, column=0, columnspan=3, pady=10, sticky="w")
+
+# Create a frame for the input text field and button
+frame3 = tk.Frame(root)
+frame3.grid(row=5, column=0, sticky="w", pady=10)
+
+# Create a label on top 
+labelIP = tk.Label(frame3, text="Cambio Indirizzo IP", anchor="w", font=("Helvetica", 12, "bold"))
+labelIP.grid(row=0, column=0, columnspan=3, pady=5, sticky="w")
+
+# Create the label
+labelIPDesc = tk.Label(frame3, text="Indirizzo IP:")
+labelIPDesc.grid(row=1, column=0, padx=5)
+
+# Create an input text field
+inputIPNew = tk.Entry(frame3)
+inputIPNew.grid(row=1, column=1, padx=5)
+
+# Create a button next to the input text field
+buttonChangeIP = tk.Button(frame3, text="Imposta", command=change_IP)
+buttonChangeIP.grid(row=1, column=2, padx=5)
 
 # Create a label below
-label3 = tk.Label(root, text=" ")
-label3.pack(pady=10)
+label3 = tk.Label(frame3, text=" ")
+label3.grid(row=2, column=0, columnspan=3, pady=10, sticky="w")
 
 # Run the application
 root.mainloop()
-
-
