@@ -12,8 +12,9 @@ import sys, os
 from pysnmp.hlapi import *
 import threading
 
-# Initialize the flag
+# Initialize the flags
 updating = False
+machine = ""
 
 def get_status(IP):
     snmp_data = get_snmp_data(IP)
@@ -60,6 +61,29 @@ def get_snmp_data(ip_address):
                 results[name] = value
 
     return results
+
+def get_machine_name(ip_address):
+    community = 'public'  # Replace with your SNMP community string
+    oid = ".1.3.6.1.4.1.19324.101.0"
+    errorIndication, errorStatus, errorIndex, varBinds = next(
+        getCmd(SnmpEngine(),
+                CommunityData(community),
+                UdpTransportTarget((ip_address, 161)),
+                ContextData(),
+                ObjectType(ObjectIdentity(oid)))
+    )
+
+    if errorIndication:
+        result = str(errorIndication)
+    elif errorStatus:
+        result = '%s at %s' % (errorStatus.prettyPrint(),
+                                        errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+    else:
+        for varBind in varBinds:
+            value = varBind[1].prettyPrint()
+            result = value
+
+    return result
     
 def check_bitrate(data):
     try:
@@ -67,12 +91,19 @@ def check_bitrate(data):
         number_str = data.split()[0]
         # Convert the string to a float
         number_float = float(number_str)
-                
-        # Check if the value is between 18 and 38
-        if 18 <= number_float <= 38:
-            return True
+        
+        if "RSR 100" in machine:
+            # Check if the value is between 6 and 8
+            if 6 <= number_float <= 8:
+                return True
+            else:
+                return False
         else:
-            return False
+            # Check if the value is between 18 and 38
+            if 18 <= number_float <= 38:
+                return True
+            else:
+                return False
     except (ValueError, IndexError):
         print("Error: The string does not match the expected format or is not a number.")
         return False
@@ -236,12 +267,12 @@ def on_closing():
 
 # Create the main window
 root = tk.Tk()
-root.title("ROVER RB200 Configurator - ver. 1.3")
+root.title("ROVER Configurator - ver. 1.3")
 root.protocol("WM_DELETE_WINDOW", on_closing)
 if getattr(sys, 'frozen', False):
     root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
-# else:
-    # root.iconbitmap("icon.ico") ------------------------ commentato
+else:
+    root.iconbitmap("icon.ico") 
 
 # Function to launch webpage
 def webpage():
@@ -253,39 +284,47 @@ def webpage():
 def update_status():
     while updating:
         IP = inputIP.get()
-        if is_valid_ip(IP):
-            
-            bitrate, freq, level, snr, isi = get_status(IP)
-            
-            labelBitrate.config(text = "Bitrate:\t{}".format(bitrate) )
-            #labelBitrate.config(text = number_float)
-            if check_bitrate( bitrate ):
-                labelBitrate.config(fg = "green")
-            else:
-                labelBitrate.config(fg = "red")
-                
-            if level != "":
-                labelStatus.config(text = "Freq.:\t{} (ISI {})\nLivello:\t{}\nSNR:\t{}".format(freq, isi, level, snr) )
+        bitrate, freq, level, snr, isi = get_status(IP)
+        
+        labelBitrate.config(text = "Bitrate:\t{}".format(bitrate) )
+        #labelBitrate.config(text = number_float)
+        if check_bitrate( bitrate ):
+            labelBitrate.config(fg = "green")
         else:
-            labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
-            labelStatus.config(text = " ")
+            labelBitrate.config(fg = "red")
+            
+        if level != "":
+            labelStatus.config(text = "Freq.:\t{} (ISI {})\nLivello:\t{}\nSNR:\t{}".format(freq, isi, level, snr) )
         time.sleep(2)
+    # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
+    if not updating:
+        labelBitrate.config(text = " ")
+        labelStatus.config(text = " ")
 
 # Function to start or stop the updates
 def toggle_update():
     global updating
-    updating = not updating
-    if updating:
-        buttonConnect.config(text = "Disconnetti")
-        labelStatus.config(text = "Connessione in corso...")
-        threading.Thread(target=update_status).start()
+    global machine
+    IP = inputIP.get()
+    if is_valid_ip(IP):
+        machine = get_machine_name(IP)
+        if "RSR 100" in machine:
+            dropdown1['values'] = ["Servizi MF", "MFSA", "MFPM"]
+            dropdown2['values'] = ["Profilo Unico"]
+        else:
+            dropdown1['values'] = ["MUX R", "MUX A", "MUX B"]
+            dropdown2['values'] = ["Profile 1", "Profile 2", "Profile 3"]
+        updating = not updating
+        if updating:
+            buttonConnect.config(text = "Disconnetti")
+            labelStatus.config(text = "Connessione in corso...")
+            threading.Thread(target=update_status).start()
+        else:
+            buttonConnect.config(text = "Connetti")
+            labelBitrate.config(text = " ")
+            labelStatus.config(text = " ")
     else:
-        buttonConnect.config(text = "Connetti")
-        labelBitrate.config(text = " ")
-        labelStatus.config(text = " ")
-        # Importante per evitare arrivo di late threads
-        time.sleep(1)
-        labelBitrate.config(text = " ")
+        labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
         labelStatus.config(text = " ")
 
 # Function to change IP address of machine
