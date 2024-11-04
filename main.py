@@ -16,6 +16,23 @@ import threading
 updating = False
 machine = ""
 
+class MUX:
+    def __init__(self, ol, pol, freq, symb, ISI):
+        self.ol = ol
+        self.pol = pol
+        self.freq = freq
+        self.symb = symb
+        self.ISI = ISI
+
+    def __str__(self):
+        return f"ol: {self.ol}, pol: {self.pol}, freq: {self.freq}, symb: {self.symb}, ISI: {self.ISI}"
+
+# Creazione dell'oggetto con i valori specificati
+muxR = MUX("10600", "HH", "12535.500", "35294", "4")
+muxA = MUX("10600", "VH", "12606.000", "35294", "4")
+muxB = MUX("10600", "VH", "12606.000", "35294", "5")
+muxMF = MUX("10600", "HH", "12627.000", "35294", "2")
+
 def get_status(IP):
     snmp_data = get_snmp_data(IP)
     return snmp_data["Bitrate"], snmp_data["Frequency"], snmp_data["Level"], snmp_data["SNR"], snmp_data["ISI"]
@@ -309,7 +326,7 @@ def toggle_update():
     if is_valid_ip(IP):
         machine = get_machine_name(IP)
         if "RSR 100" in machine:
-            dropdown1['values'] = ["Servizi MF", "MFSA", "MFPM"]
+            dropdown1['values'] = ["Servizi MF"]
             dropdown2['values'] = ["Profilo Unico"]
         else:
             dropdown1['values'] = ["MUX R", "MUX A", "MUX B"]
@@ -352,30 +369,18 @@ def set_parameters():
             label2.config(text=f"Seleziona un profilo")
             return
         if service == "MUX R":
-            ol = "10600"
-            pol = "HH"
-            freq = "12535.500"
-            symb = "35294"
-            ISI = "4"
+            mux = muxR
         elif service == "MUX A":
-            ol = "10600"
-            pol = "VH"
-            freq = "12606.000"
-            symb = "35294"
-            ISI = "4"
+            mux = muxA
         elif service == "MUX B":
-            ol = "10600"
-            pol = "VH"
-            freq = "12606.000"
-            symb = "35294"
-            ISI = "5"
+            mux = muxB
         else:
             label2.config(text=f"Seleziona un servizio")
             return
         nprofile = profile.split()[1]
         set_PLS(IP)
-        set_ISI(IP, ISI)
-        set_RX(IP, ol, freq, pol, symb, nprofile)
+        set_ISI(IP, mux.ISI)
+        set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, nprofile)
     
         label2.config(text=f"Impostato {service} su {profile}")
         labelBitrate.config(text = "...")
