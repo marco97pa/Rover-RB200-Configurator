@@ -1,7 +1,5 @@
 # COSE DA FARE:
-# - Mostrare alcuni servizi
 # - Selezionare audio MF
-# - Numero modello e versione
 
 import requests
 from http.client import RemoteDisconnected
@@ -237,7 +235,7 @@ def get_service_audio(ip_address):
 
     return result
 
-def get_machine_name(ip_address):
+def get_machine(ip_address):
     community = 'public'  # Replace with your SNMP community string
     oid = ".1.3.6.1.4.1.19324.101.0"
     errorIndication, errorStatus, errorIndex, varBinds = next(
@@ -249,16 +247,35 @@ def get_machine_name(ip_address):
     )
 
     if errorIndication:
-        result = str(errorIndication)
+        name = str(errorIndication)
     elif errorStatus:
-        result = '%s at %s' % (errorStatus.prettyPrint(),
+        name = '%s at %s' % (errorStatus.prettyPrint(),
                                         errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
     else:
         for varBind in varBinds:
             value = varBind[1].prettyPrint()
-            result = value
-    print("Machine name is {}".format(result))
-    return result
+            name = value
+    
+    oid = ".1.3.6.1.4.1.19324.2.3.1.1.3.0"
+    errorIndication, errorStatus, errorIndex, varBinds = next(
+        getCmd(SnmpEngine(),
+                CommunityData(community),
+                UdpTransportTarget((ip_address, 161)),
+                ContextData(),
+                ObjectType(ObjectIdentity(oid)))
+    )
+
+    if errorIndication:
+        version = str(errorIndication)
+    elif errorStatus:
+        version = '%s at %s' % (errorStatus.prettyPrint(),
+                                        errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+    else:
+        for varBind in varBinds:
+            value = varBind[1].prettyPrint()
+            version = value
+
+    return name, version
     
 def check_bitrate(data):
     try:
@@ -484,8 +501,8 @@ def toggle_update():
     global machine
     IP = inputIP.get()
     if is_valid_ip(IP):
-        machine = get_machine_name(IP)
-        labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, "?"))
+        machine, version = get_machine(IP)
+        labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, version))
         if "RSR 100" in machine:
             dropdown1['values'] = ["Servizi MF"]
             dropdown2['values'] = ["Profilo Unico"]
@@ -636,16 +653,16 @@ buttonChangeIP.grid(row=1, column=2, padx=5)
 label3 = tk.Label(frame3, text=" ")
 label3.grid(row=2, column=0, columnspan=3, pady=10, sticky="w")
 
-# Create a frame for the drop down menus and button
+# Create a frame for details and informations
 frame4 = tk.Frame(root)
 frame4.grid(row=6, column=0, sticky="w", pady=10)
 
-# Create a label on top of the dropdown menus
+# Create a label on top of details
 labelInfo = tk.Label(frame4, text="Informazioni", anchor="w", font=("Helvetica", 12, "bold"))
 labelInfo.grid(row=0, column=0, columnspan=3, pady=5, sticky="w")
 
-# Create a label on top of the dropdown menus
-labelInfoDesc = tk.Label(frame4, text = "", anchor="w")
+# Create a label for details
+labelInfoDesc = tk.Label(frame4, text = "", anchor="w", justify="left", width=50)
 labelInfoDesc.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
 # Run the application
