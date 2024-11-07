@@ -1,9 +1,7 @@
 # COSE DA FARE:
-# - Mostrare il MUX
 # - Mostrare alcuni servizi
 # - Selezionare audio MF
 # - Numero modello e versione
-# - Alert info e aggiornamenti
 
 import requests
 from http.client import RemoteDisconnected
@@ -29,7 +27,8 @@ updating = False
 machine = ""
 
 class MUX:
-    def __init__(self, ol, pol, freq, symb, ISI):
+    def __init__(self, name, ol, pol, freq, symb, ISI):
+        self.name = name
         self.ol = ol
         self.pol = pol
         self.freq = freq
@@ -40,11 +39,27 @@ class MUX:
         return f"ol: {self.ol}, pol: {self.pol}, freq: {self.freq}, symb: {self.symb}, ISI: {self.ISI}"
 
 # Creazione dell'oggetto con i valori specificati
-muxR = MUX("10600", "HH", "12535.500", "35294", "4")
-muxA = MUX("10600", "VH", "12606.000", "35294", "4")
-muxB = MUX("10600", "VH", "12606.000", "35294", "5")
-muxMF = MUX("10600", "HH", "12627.000", "35294", "2")
+muxR = MUX("MUX R", "10600", "HH", "12535.500", "35294", "4")
+muxA = MUX("MUX A", "10600", "VH", "12606.000", "35294", "4")
+muxB = MUX("MUX B", "10600", "VH", "12606.000", "35294", "5")
+muxMF = MUX("Servizi MF", "10600", "HH", "12627.000", "35294", "2")
 
+# Lista di oggetti MUX
+mux_list = [muxR, muxA, muxB, muxMF]
+
+# Funzione per cercare un MUX per nome
+def search_mux_by_name(name):
+    for mux in mux_list:
+        if mux.name == name:
+            return mux
+    return None
+
+# Funzione per cercare un MUX per frequenza e ISI
+def search_mux_by_freq_and_ISI(freq, ISI):
+    for mux in mux_list:
+        if str( float(mux.freq) ) + " MHz" == freq and mux.ISI == ISI:
+            return mux.name
+    return "NON RICONOSCIUTO"
 
 # Function to get the latest release version from GitHub
 def get_latest_release_version(owner, repo):
@@ -138,7 +153,7 @@ def get_snmp_data(ip_address):
             for varBind in varBinds:
                 value = varBind[1].prettyPrint()
                 if name == "Frequency":
-                    value = str( float(value)/100 ) + " MHz"
+                    value = str( float(value)/1000 ) + " MHz"
                 elif name == "Level":
                     value = str( float(value)/10 ) + " dBuV"
                 elif name == "SNR":
@@ -373,21 +388,19 @@ def update_status():
     while updating:
         IP = inputIP.get()
         bitrate, freq, level, snr, isi = get_status(IP)
-        
         labelBitrate.config(text = "Bitrate:\t{}".format(bitrate) )
-        #labelBitrate.config(text = number_float)
         if check_bitrate( bitrate ):
             labelBitrate.config(fg = "green")
         else:
             labelBitrate.config(fg = "red")
             
         if level != "":
-            labelStatus.config(text = "Freq.:\t{} (ISI {})\nLivello:\t{}\nSNR:\t{}".format(freq, isi, level, snr) )
+            labelStatus.config(text = "Freq.:\t{} (ISI {})\nServizio rilevato:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), level, snr) )
         time.sleep(2)
     # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
     if not updating:
-        labelBitrate.config(text = " ")
-        labelStatus.config(text = " ")
+        labelBitrate.config(text = "")
+        labelStatus.config(text = "")
 
 # Function to start or stop the updates
 def toggle_update():
@@ -439,12 +452,8 @@ def set_parameters():
         if profile == "":
             label2.config(text=f"Seleziona un profilo")
             return
-        if service == "MUX R":
-            mux = muxR
-        elif service == "MUX A":
-            mux = muxA
-        elif service == "MUX B":
-            mux = muxB
+        if search_mux_by_name(service) is not None:
+            mux = search_mux_by_name(service).name
         else:
             label2.config(text=f"Seleziona un servizio")
             return
