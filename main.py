@@ -1,3 +1,10 @@
+# COSE DA FARE:
+# - Mostrare il MUX
+# - Mostrare alcuni servizi
+# - Selezionare audio MF
+# - Numero modello e versione
+# - Alert info e aggiornamenti
+
 import requests
 from http.client import RemoteDisconnected
 from urllib3.exceptions import ProtocolError
@@ -5,12 +12,17 @@ from requests.exceptions import ConnectionError, Timeout, ChunkedEncodingError
 import webbrowser
 import re
 import time
-import json
+from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import ttk
+from tkinter import Toplevel, Label, Button
 import sys, os
 from pysnmp.hlapi import *
 import threading
+
+VERSION = "1.5"
+owner = "marco97pa"  # Repository owner's username
+repo = "Rover-RB200-Configurator"  # Repository name
 
 # Initialize the flags
 updating = False
@@ -32,6 +44,65 @@ muxR = MUX("10600", "HH", "12535.500", "35294", "4")
 muxA = MUX("10600", "VH", "12606.000", "35294", "4")
 muxB = MUX("10600", "VH", "12606.000", "35294", "5")
 muxMF = MUX("10600", "HH", "12627.000", "35294", "2")
+
+
+# Function to get the latest release version from GitHub
+def get_latest_release_version(owner, repo):
+    url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
+    response = requests.get(url)
+    if response.status_code == 200:
+        release_info = response.json()
+        return release_info['tag_name'], release_info['html_url']
+    else:
+        return None, None
+
+# Function to show the custom alert with version information
+def show_version_info():
+    current_version = VERSION
+    latest_version, latest_url = get_latest_release_version(owner, repo) 
+
+    if latest_version:
+        update_button_state = tk.NORMAL if current_version != latest_version else tk.DISABLED
+
+        # Create a custom dialog window
+        dialog = Toplevel(root)
+        dialog.title("Informazioni")
+
+        Label(dialog, text="Realizzato da Marco Fantauzzo, Salvatore Chillura e Giovanni Gaetani").pack(pady=5)
+
+        # Load and display the image
+        image_url = "https://www.raiway.it/static/media/logo.74640e43.png"  # Logo Rai Way dal sito
+        image = Image.open(requests.get(image_url, stream=True).raw)
+
+        # Calculate the new size while maintaining the aspect ratio
+        max_size = (100, 100)
+        image.thumbnail(max_size, Image.LANCZOS)
+        photo = ImageTk.PhotoImage(image)
+
+        image_label = Label(dialog, image=photo)
+        image_label.image = photo  # Keep a reference to avoid garbage collection
+        image_label.pack(pady=5)
+
+        Label(dialog, text="Versione installata:").pack(pady=5)
+        Label(dialog, text=current_version).pack(pady=5)
+        Label(dialog, text="Ultima versione:").pack(pady=5)
+        Label(dialog, text=latest_version).pack(pady=5)
+
+        update_button = Button(dialog, text="Aggiorna", state=update_button_state, command=lambda: update_app(latest_url))
+        update_button.pack(pady=10)
+
+        Button(dialog, text="Chiudi", command=dialog.destroy).pack(pady=5)
+    else:
+        tk.messagebox.showerror("Errore", "Non sei connesso a Internet, riprova")
+
+# Function to handle the update action
+def update_app(latest_url):
+    if latest_url:
+        webbrowser.open(latest_url)
+    else:
+        tk.messagebox.showerror("Errore", "Non riesco a trovare la nuova versione")
+
+
 
 def get_status(IP):
     snmp_data = get_snmp_data(IP)
@@ -99,7 +170,7 @@ def get_machine_name(ip_address):
         for varBind in varBinds:
             value = varBind[1].prettyPrint()
             result = value
-
+    print("Machine name is {}".format(result))
     return result
     
 def check_bitrate(data):
@@ -284,7 +355,7 @@ def on_closing():
 
 # Create the main window
 root = tk.Tk()
-root.title("ROVER Configurator - ver. 1.3")
+root.title("ROVER Configurator - ver. " + VERSION)
 root.protocol("WM_DELETE_WINDOW", on_closing)
 if getattr(sys, 'frozen', False):
     root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
@@ -407,6 +478,10 @@ buttonConnect.grid(row=0, column=2, padx=5)
 # Create a button next to the input text field
 buttonWeb = tk.Button(frame1, text="Pag. Web", command=webpage)
 buttonWeb.grid(row=0, column=3, padx=5)
+
+# Create a button to show version info
+check_button = tk.Button(frame1, text="Info", command=show_version_info)
+check_button.grid(row=0, column=4, padx=5)
 
 # Create a label on top of the dropdown menus
 labelStatusT = tk.Label(root, text="Stato", anchor="w", font=("Helvetica", 12, "bold"))
