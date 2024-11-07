@@ -16,7 +16,7 @@ import sys, os
 from pysnmp.hlapi import *
 import threading
 
-VERSION = "1.5"
+VERSION = "1.7"
 owner = "marco97pa"  # Repository owner's username
 repo = "Rover-RB200-Configurator"  # Repository name
 
@@ -444,6 +444,12 @@ def is_valid_ip(ip):
     # Regular expression for validating an IPv4 address
     ipv4_pattern = re.compile(r'^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
     
+    match = re.match(r'^https?://([^/]+)', ip)
+    if match:
+        ip = match.group(1)
+        inputIP.delete(0, tk.END)  # Clear the current value
+        inputIP.insert(0, ip)  # Insert the new value
+
     if ipv4_pattern.match(ip):
         return True
     else:
@@ -499,8 +505,8 @@ def update_status():
 def toggle_update():
     global updating
     global machine
-    IP = inputIP.get()
-    if is_valid_ip(IP):
+    if is_valid_ip(inputIP.get()):
+        IP = inputIP.get()
         machine, version = get_machine(IP)
         labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, version))
         if "RSR 100" in machine:
@@ -513,9 +519,13 @@ def toggle_update():
         if updating:
             buttonConnect.config(text = "Disconnetti")
             labelStatus.config(text = "Connessione in corso...")
+            inputIP.config(state='readonly')
+            inputIP.config(bg='lightgray', fg='gray')
             threading.Thread(target=update_status).start()
         else:
             buttonConnect.config(text = "Connetti")
+            inputIP.config(state='normal')
+            inputIP.config(bg='white', fg='black')
             labelBitrate.config(text = "")
             labelStatus.config(text = "")
             labelInfoDesc.config(text = "")
