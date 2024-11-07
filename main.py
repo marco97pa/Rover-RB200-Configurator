@@ -39,7 +39,7 @@ class MUX:
         return f"ol: {self.ol}, pol: {self.pol}, freq: {self.freq}, symb: {self.symb}, ISI: {self.ISI}"
 
 # Creazione dell'oggetto con i valori specificati
-muxR = MUX("MUX R", "10600", "HH", "12535.500", "35294", "4")
+muxR = MUX("MUX MR10", "10600", "HH", "12535.500", "35294", "4")
 muxA = MUX("MUX A", "10600", "VH", "12606.000", "35294", "4")
 muxB = MUX("MUX B", "10600", "VH", "12606.000", "35294", "5")
 muxMF = MUX("Servizi MF", "10600", "HH", "12627.000", "35294", "2")
@@ -164,6 +164,78 @@ def get_snmp_data(ip_address):
                 results[name] = value
 
     return results
+
+def get_service_list(ip_address):
+    community = 'public'  # Replace with your SNMP community string
+    oids = [
+        '.1.3.6.1.4.1.19324.2.3.6.2.12.1.2.1',
+        '.1.3.6.1.4.1.19324.2.3.6.2.12.1.2.2',
+        '.1.3.6.1.4.1.19324.2.3.6.2.12.1.2.3',
+        '.1.3.6.1.4.1.19324.2.3.6.2.12.1.2.4',
+        '.1.3.6.1.4.1.19324.2.3.6.2.12.1.2.5'
+    ]
+
+    results = ""
+
+    for oid in oids:
+        errorIndication, errorStatus, errorIndex, varBinds = next(
+            getCmd(SnmpEngine(),
+                   CommunityData(community),
+                   UdpTransportTarget((ip_address, 161)),
+                   ContextData(),
+                   ObjectType(ObjectIdentity(oid)))
+        )
+
+        if errorIndication:
+            results = str(errorIndication)
+        elif errorStatus:
+            results = '%s at %s' % (errorStatus.prettyPrint(),
+                                          errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+        else:
+            for varBind in varBinds:
+                results = results + varBind[1].prettyPrint() + ", "
+    
+    results = "...".join(results.rsplit(", ", 1))
+    return results
+
+def get_service_audio(ip_address):
+    community = 'public'  # Replace with your SNMP community string
+    oid = ".1.3.6.1.4.1.19324.2.3.8.3.2.0"
+    errorIndication, errorStatus, errorIndex, varBinds = next(
+        getCmd(SnmpEngine(),
+                CommunityData(community),
+                UdpTransportTarget((ip_address, 161)),
+                ContextData(),
+                ObjectType(ObjectIdentity(oid)))
+    )
+
+    if errorIndication:
+        result = str(errorIndication)
+    elif errorStatus:
+        result = '%s at %s' % (errorStatus.prettyPrint(),
+                                        errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+    else:
+        for varBind in varBinds:
+            value = varBind[1].prettyPrint()
+            oid = ".1.3.6.1.4.1.19324.2.3.8.2.3.1.2." + value
+            errorIndication, errorStatus, errorIndex, varBinds = next(
+                getCmd(SnmpEngine(),
+                        CommunityData(community),
+                        UdpTransportTarget((ip_address, 161)),
+                        ContextData(),
+                        ObjectType(ObjectIdentity(oid)))
+            )
+            if errorIndication:
+                result = str(errorIndication)
+            elif errorStatus:
+                result = '%s at %s' % (errorStatus.prettyPrint(),
+                                                errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+            else:
+                for varBind in varBinds:
+                    value = varBind[1].prettyPrint()
+                    result = value
+
+    return result
 
 def get_machine_name(ip_address):
     community = 'public'  # Replace with your SNMP community string
@@ -395,7 +467,11 @@ def update_status():
             labelBitrate.config(fg = "red")
             
         if level != "":
-            labelStatus.config(text = "Freq.:\t{} (ISI {})\nServizio rilevato:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), level, snr) )
+            if "RSR 100" in machine:
+                services = get_service_audio(IP)
+            else:
+                services = get_service_list(IP)
+            labelStatus.config(text = "Freq.:\t{} (ISI {})\nMUX rilevato:\t{}\nServizi:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), services, level, snr) )
         time.sleep(2)
     # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
     if not updating:
@@ -409,6 +485,7 @@ def toggle_update():
     IP = inputIP.get()
     if is_valid_ip(IP):
         machine = get_machine_name(IP)
+        labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, "?"))
         if "RSR 100" in machine:
             dropdown1['values'] = ["Servizi MF"]
             dropdown2['values'] = ["Profilo Unico"]
@@ -422,11 +499,12 @@ def toggle_update():
             threading.Thread(target=update_status).start()
         else:
             buttonConnect.config(text = "Connetti")
-            labelBitrate.config(text = " ")
-            labelStatus.config(text = " ")
+            labelBitrate.config(text = "")
+            labelStatus.config(text = "")
+            labelInfoDesc.config(text = "")
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
-        labelStatus.config(text = " ")
+        labelStatus.config(text = "")
 
 # Function to change IP address of machine
 def change_IP():
@@ -438,8 +516,8 @@ def change_IP():
             if updating:
                 toggle_update()
             label3.config(text = "Indirizzo IP cambiato. Ricollegati all'apparato.")
-            labelBitrate.config(text = " ")
-            labelStatus.config(text = " ")
+            labelBitrate.config(text = "")
+            labelStatus.config(text = "")
     else:
         label3.config(text = "Indirizzo non valido")
 
@@ -557,6 +635,18 @@ buttonChangeIP.grid(row=1, column=2, padx=5)
 # Create a label below
 label3 = tk.Label(frame3, text=" ")
 label3.grid(row=2, column=0, columnspan=3, pady=10, sticky="w")
+
+# Create a frame for the drop down menus and button
+frame4 = tk.Frame(root)
+frame4.grid(row=6, column=0, sticky="w", pady=10)
+
+# Create a label on top of the dropdown menus
+labelInfo = tk.Label(frame4, text="Informazioni", anchor="w", font=("Helvetica", 12, "bold"))
+labelInfo.grid(row=0, column=0, columnspan=3, pady=5, sticky="w")
+
+# Create a label on top of the dropdown menus
+labelInfoDesc = tk.Label(frame4, text = "", anchor="w")
+labelInfoDesc.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
 # Run the application
 root.mainloop()
