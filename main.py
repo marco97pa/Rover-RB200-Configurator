@@ -12,6 +12,7 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import ttk
 from tkinter import Toplevel, Label, Button
+from tkinter import messagebox
 import sys, os
 from pysnmp.hlapi import *
 import threading
@@ -67,13 +68,17 @@ def search_mux_by_freq_and_ISI(freq, ISI):
 # Function to get the latest release version from GitHub
 def get_latest_release_version(owner, repo):
     url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
-    response = requests.get(url)
-    if response.status_code == 200:
-        release_info = response.json()
-        return release_info['tag_name'], release_info['html_url']
-    else:
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            release_info = response.json()
+            return release_info['tag_name'], release_info['html_url']
+        else:
+            return None, None
+    except Exception as err:
+        print(f"An error occurred: {err}")
         return None, None
-
+    
 # Function to show the custom alert with version information
 def show_version_info():
     current_version = VERSION
@@ -111,14 +116,14 @@ def show_version_info():
 
         Button(dialog, text="Chiudi", command=dialog.destroy).pack(pady=5)
     else:
-        tk.messagebox.showerror("Errore", "Non sei connesso a Internet, riprova")
+        messagebox.showerror("Errore", "Non sei connesso a Internet, riprova")
 
 # Function to handle the update action
 def update_app(latest_url):
     if latest_url:
         webbrowser.open(latest_url)
     else:
-        tk.messagebox.showerror("Errore", "Non riesco a trovare la nuova versione")
+        messagebox.showerror("Errore", "Non riesco a trovare la nuova versione")
 
 def is_pingable(ip):
     # Determine the current operating system
