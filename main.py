@@ -268,10 +268,9 @@ def get_machine(ip_address):
     )
 
     if errorIndication:
-        name = str(errorIndication)
+        name = "ERROR"
     elif errorStatus:
-        name = '%s at %s' % (errorStatus.prettyPrint(),
-                                        errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+        name = "ERROR"
     else:
         for varBind in varBinds:
             value = varBind[1].prettyPrint()
@@ -551,8 +550,13 @@ def toggle_update():
         IP = inputIP.get()
         if is_pingable(IP):
             machine, version = get_machine(IP)
+            if machine == "ERROR":
+                labelBitrate.config(text = "Raggiungibile, ma non risponde a SNMP", fg = "red")
+                labelStatus.config(text = "Verifica l'IP inserito o riavvia apparato")
+                return
+
             labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, version))
-            threading.Timer(1.0, update_services).start()
+            
             if "RSR 100" in machine:
                 dropdown1['values'] = mux_MF
                 dropdown2['values'] = ["Profilo Unico"]
@@ -566,6 +570,7 @@ def toggle_update():
                 inputIP.config(state='readonly')
                 inputIP.config(bg='lightgray', fg='gray')
                 update_status(fast_mode=True)
+                threading.Timer(1.0, update_services).start()
                 threading.Thread(target=update_status).start()
             else:
                 buttonConnect.config(text = "Connetti")
