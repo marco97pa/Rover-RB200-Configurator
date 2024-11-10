@@ -165,9 +165,11 @@ def get_snmp_data(ip_address):
 
         if errorIndication:
             results[name] = str(errorIndication)
+            results[name] = results[name][:20]
         elif errorStatus:
             results[name] = '%s at %s' % (errorStatus.prettyPrint(),
                                           errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+            results[name] = results[name][:20]
         else:
             for varBind in varBinds:
                 value = varBind[1].prettyPrint()
@@ -206,10 +208,9 @@ def get_service_list(ip_address):
         )
 
         if errorIndication:
-            results = str(errorIndication)
+            results = "?"
         elif errorStatus:
-            results = '%s at %s' % (errorStatus.prettyPrint(),
-                                          errorIndex and varBinds[int(errorIndex) - 1][0] or '?')
+            results = "?"
         else:
             for varBind in varBinds:
                 results = results + varBind[1].prettyPrint() + ", "
@@ -626,7 +627,7 @@ def set_parameters():
         labelBitrate.config(text = "...")
         labelStatus.config(text = "...")
         labelServices.config(text = "...")
-        threading.Timer(15.0, update_services).start()
+        threading.Timer(20.0, update_services).start()
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
 
