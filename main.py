@@ -16,7 +16,7 @@ import sys, os
 from pysnmp.hlapi import *
 import threading
 
-VERSION = "1.7"
+VERSION = "1.8"
 owner = "marco97pa"  # Repository owner's username
 repo = "Rover-RB200-Configurator"  # Repository name
 
@@ -44,6 +44,8 @@ muxMF = MUX("Servizi MF", "10600", "HH", "12627.000", "35294", "2")
 
 # Lista di oggetti MUX
 mux_list = [muxR, muxA, muxB, muxMF]
+mux_DVBT = [muxR.name, muxA.name, muxB.name]
+mux_MF = [muxMF.name]
 
 # Funzione per cercare un MUX per nome
 def search_mux_by_name(name):
@@ -303,7 +305,7 @@ def check_bitrate(data):
 def set_ISI(IP, ISI):
     # URL for the GET request
     url = "http://" + IP + "/conf_sat.html?11=" + ISI
-    max_retries = 10
+    max_retries = 15
     attempts = 0
     
     while attempts < max_retries:
@@ -323,7 +325,7 @@ def set_ISI(IP, ISI):
 def set_PLS(IP):
     # URL for the GET request
     url = "http://" + IP + "/conf_sat.html?16=0&17=131070&18=262140"
-    max_retries = 10
+    max_retries = 15
     attempts = 0
     
     while attempts < max_retries:
@@ -343,7 +345,7 @@ def set_PLS(IP):
 def set_Profile(IP, profile):
     # URL for the GET request
     url = "http://" + IP + "/conf_sys.html?270=Load+Profile+" + profile
-    max_retries = 10
+    max_retries = 15
     attempts = 0
     
     while attempts < max_retries:
@@ -376,7 +378,7 @@ def gateway(ip_address):
 def set_NTP(IP, NTP):
     # URL for the GET request
     url = "http://" + IP + "/conf_sys.html?267=NTP&258=" + NTP + "&259=1+h"
-    max_retries = 10
+    max_retries = 15
     attempts = 0
     
     while attempts < max_retries:
@@ -478,6 +480,20 @@ def webpage():
     if is_valid_ip(IP):
         webbrowser.open("http://" + IP)
 
+def update_services():
+    while updating:
+        IP = inputIP.get()
+        if "RSR 100" in machine:
+            labelServices.config(text = "Servizio: " + get_service_audio(IP))
+        else:
+            labelServices.config(text = "Servizi: " + get_service_list(IP))
+        
+        # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
+        if not updating:
+            labelBitrate.config(text = "")
+            labelStatus.config(text = "")
+            labelServices.config(text = "")
+    
 # Function to update the label text
 def update_status():
     while updating:
@@ -488,18 +504,17 @@ def update_status():
             labelBitrate.config(fg = "green")
         else:
             labelBitrate.config(fg = "red")
-            
+
         if level != "":
-            if "RSR 100" in machine:
-                services = get_service_audio(IP)
-            else:
-                services = get_service_list(IP)
-            labelStatus.config(text = "Freq.:\t{} (ISI {})\nMUX rilevato:\t{}\nServizi:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), services, level, snr) )
+            labelStatus.config(text = "Freq.:\t{} (ISI {})\nMUX rilevato:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), level, snr) )
+        
+        # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
+        if not updating:
+            labelBitrate.config(text = "")
+            labelStatus.config(text = "")
+            labelServices.config(text = "")
+
         time.sleep(2)
-    # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
-    if not updating:
-        labelBitrate.config(text = "")
-        labelStatus.config(text = "")
 
 # Function to start or stop the updates
 def toggle_update():
@@ -509,11 +524,12 @@ def toggle_update():
         IP = inputIP.get()
         machine, version = get_machine(IP)
         labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, version))
+        threading.Timer(1.0, update_services).start()
         if "RSR 100" in machine:
-            dropdown1['values'] = ["Servizi MF"]
+            dropdown1['values'] = mux_MF
             dropdown2['values'] = ["Profilo Unico"]
         else:
-            dropdown1['values'] = ["MUX R", "MUX A", "MUX B"]
+            dropdown1['values'] = mux_DVBT
             dropdown2['values'] = ["Profile 1", "Profile 2", "Profile 3"]
         updating = not updating
         if updating:
@@ -529,6 +545,7 @@ def toggle_update():
             labelBitrate.config(text = "")
             labelStatus.config(text = "")
             labelInfoDesc.config(text = "")
+            labelServices.config(text = "")
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
         labelStatus.config(text = "")
@@ -545,6 +562,8 @@ def change_IP():
             label3.config(text = "Indirizzo IP cambiato. Ricollegati all'apparato.")
             labelBitrate.config(text = "")
             labelStatus.config(text = "")
+            labelInfoDesc.config(text = "")
+            labelServices.config(text = "")
     else:
         label3.config(text = "Indirizzo non valido")
 
@@ -558,7 +577,7 @@ def set_parameters():
             label2.config(text=f"Seleziona un profilo")
             return
         if search_mux_by_name(service) is not None:
-            mux = search_mux_by_name(service).name
+            mux = search_mux_by_name(service)
         else:
             label2.config(text=f"Seleziona un servizio")
             return
@@ -566,10 +585,11 @@ def set_parameters():
         set_PLS(IP)
         set_ISI(IP, mux.ISI)
         set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, nprofile)
-    
         label2.config(text=f"Impostato {service} su {profile}")
         labelBitrate.config(text = "...")
         labelStatus.config(text = "...")
+        labelServices.config(text = "...")
+        threading.Timer(10.0, update_services).start()
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
 
@@ -598,16 +618,20 @@ check_button = tk.Button(frame1, text="Info", command=show_version_info)
 check_button.grid(row=0, column=4, padx=5)
 
 # Create a label on top of the dropdown menus
-labelStatusT = tk.Label(root, text="Stato", anchor="w", font=("Helvetica", 12, "bold"))
+labelStatusT = tk.Label(frame1, text="Stato", anchor="w", font=("Helvetica", 12, "bold"))
 labelStatusT.grid(row=1, column=0, pady=5, sticky="w")
 
 # Create a label below the input text field and button
-labelBitrate = tk.Label(root, text=" ")
+labelBitrate = tk.Label(frame1, text=" ")
 labelBitrate.grid(row=2, column=0, pady=5, columnspan=4, sticky="ew")
 
 # Create a label below the input text field and button
-labelStatus = tk.Label(root, text=" ")
+labelStatus = tk.Label(frame1, text=" ")
 labelStatus.grid(row=3, column=0, pady=5, columnspan=4, sticky="ew")
+
+# Create a label below the input text field and button
+labelServices = tk.Label(frame1, text=" ")
+labelServices.grid(row=4, column=0, pady=5, columnspan=4, sticky="ew")
 
 # Create a frame for the drop down menus and button
 frame2 = tk.Frame(root)
@@ -622,7 +646,7 @@ labelSettingsDesc = tk.Label(frame2, text="Seleziona servizi e profili:", anchor
 labelSettingsDesc.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
 # Create the first drop down menu
-options1 = ["MUX R", "MUX A", "MUX B"]
+options1 = mux_list
 dropdown1 = ttk.Combobox(frame2, values=options1)
 dropdown1.grid(row=2, column=0, padx=5)
 
