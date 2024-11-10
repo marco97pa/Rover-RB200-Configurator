@@ -1,5 +1,5 @@
 # COSE DA FARE:
-# - Selezionare audio MF
+# - Selezionare audio MF nel metodo set_radio_service
 
 import requests
 from http.client import RemoteDisconnected
@@ -20,7 +20,7 @@ import subprocess
 import platform
 
 
-VERSION = "1.8"
+VERSION = "1.9"
 owner = "marco97pa"  # Repository owner's username
 repo = "Rover-RB200-Configurator"  # Repository name
 
@@ -50,6 +50,15 @@ muxMF = MUX("Servizi MF", "10600", "HH", "12627.000", "35294", "2")
 mux_list = [muxR, muxA, muxB, muxMF]
 mux_DVBT = [muxR.name, muxA.name, muxB.name]
 mux_MF = [muxMF.name]
+
+radio_services = {
+    14: "Rai Radio1 PA",
+    27: "Rai Radio 2",
+    25: "Rai Radio 3",
+    26: "Rai Radio GR Parlamento",
+    29: "Rai Isoradio",
+    24: "Rai Radio 1"
+}	
 
 # Funzione per cercare un MUX per nome
 def search_mux_by_name(name):
@@ -435,8 +444,11 @@ def set_IP(IP, NewIP):
                 break
 
 def set_RX(IP, ol, freq, pol, symb, profile):
-    # URL for the GET request
-    url = "http://" + IP + "/conf_sat.html?2=" + ol + "+MHz&5=DVB-S2&9=Auto+Symbolrate&3=" + freq + "+MHz&6=" + pol + "&7=OFF&8=0+dB&4=" + symb + "+kS%2Fs&15=Loop&10=MIS&61=AUTO&270=Save+as+Profile+" + profile + ""
+    if profile == 0:
+        url = "http://" + IP + "/conf_sat.html?2=" + ol + "+MHz&5=DVB-S2&9=Auto+Symbolrate&3=" + freq + "+MHz&6=" + pol + "&7=OFF&8=0+dB&4=" + symb + "+kS%2Fs&15=Loop&10=MIS&61=AUTO"
+    else:
+        # URL for the GET request
+        url = "http://" + IP + "/conf_sat.html?2=" + ol + "+MHz&5=DVB-S2&9=Auto+Symbolrate&3=" + freq + "+MHz&6=" + pol + "&7=OFF&8=0+dB&4=" + symb + "+kS%2Fs&15=Loop&10=MIS&61=AUTO&270=Save+as+Profile+" + profile + ""
     print(url)
     
     max_retries = 15
@@ -460,6 +472,8 @@ def set_RX(IP, ol, freq, pol, symb, profile):
             print("OK: Device not responding, probably rebooting")
             break
 
+def set_radio_service(ip, service):
+    print(service)
 
 def is_valid_ip(ip):
     # Regular expression for validating an IPv4 address
@@ -560,7 +574,7 @@ def toggle_update():
             
             if "RSR 100" in machine:
                 dropdown1['values'] = mux_MF
-                dropdown2['values'] = ["Profilo Unico"]
+                dropdown2['values'] = list(radio_services.values())
             else:
                 dropdown1['values'] = mux_DVBT
                 dropdown2['values'] = ["Profile 1", "Profile 2", "Profile 3"]
@@ -619,10 +633,18 @@ def set_parameters():
         else:
             label2.config(text=f"Seleziona un servizio")
             return
-        nprofile = profile.split()[1]
+        
         set_PLS(IP)
         set_ISI(IP, mux.ISI)
-        set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, nprofile)
+        if "RSR 100" in machine:
+            set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, 0)
+            for number, name in radio_services.items():
+                if name == profile:
+                    set_radio_service(IP, number)
+        else:
+            nprofile = profile.split()[1]
+            set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, nprofile)
+        
         label2.config(text=f"Impostato {service} su {profile}")
         labelBitrate.config(text = "...")
         labelStatus.config(text = "...")
