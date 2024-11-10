@@ -481,7 +481,8 @@ def webpage():
         webbrowser.open("http://" + IP)
 
 def update_services():
-    while updating:
+    global updating
+    if updating:
         IP = inputIP.get()
         if "RSR 100" in machine:
             labelServices.config(text = "Servizio: " + get_service_audio(IP))
@@ -495,7 +496,8 @@ def update_services():
             labelServices.config(text = "")
     
 # Function to update the label text
-def update_status():
+def update_status(fast_mode = False):
+    global updating
     while updating:
         IP = inputIP.get()
         bitrate, freq, level, snr, isi = get_status(IP)
@@ -514,7 +516,13 @@ def update_status():
             labelStatus.config(text = "")
             labelServices.config(text = "")
 
-        time.sleep(2)
+        if not fast_mode:
+            time.sleep(2)
+        else:
+            updating = not updating
+
+    if fast_mode:
+            updating = not updating
 
 # Function to start or stop the updates
 def toggle_update():
@@ -537,6 +545,7 @@ def toggle_update():
             labelStatus.config(text = "Connessione in corso...")
             inputIP.config(state='readonly')
             inputIP.config(bg='lightgray', fg='gray')
+            update_status(fast_mode=True)
             threading.Thread(target=update_status).start()
         else:
             buttonConnect.config(text = "Connetti")
@@ -589,7 +598,7 @@ def set_parameters():
         labelBitrate.config(text = "...")
         labelStatus.config(text = "...")
         labelServices.config(text = "...")
-        threading.Timer(10.0, update_services).start()
+        threading.Timer(15.0, update_services).start()
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
 
