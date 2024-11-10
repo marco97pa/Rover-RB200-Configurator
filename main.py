@@ -15,6 +15,9 @@ from tkinter import Toplevel, Label, Button
 import sys, os
 from pysnmp.hlapi import *
 import threading
+import subprocess
+import platform
+
 
 VERSION = "1.8"
 owner = "marco97pa"  # Repository owner's username
@@ -117,7 +120,18 @@ def update_app(latest_url):
     else:
         tk.messagebox.showerror("Errore", "Non riesco a trovare la nuova versione")
 
-
+def is_pingable(ip):
+    # Determine the current operating system
+    param = "-n" if platform.system().lower() == "windows" else "-c"
+    
+    try:
+        # Use the ping command to check if the IP is reachable
+        output = subprocess.run(["ping", param, "1", ip], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Check the return code. If it's 0, the IP is reachable
+        return output.returncode == 0
+    except Exception as e:
+        # In case of any exception, return False
+        return False
 
 def get_status(IP):
     snmp_data = get_snmp_data(IP)
@@ -530,31 +544,35 @@ def toggle_update():
     global machine
     if is_valid_ip(inputIP.get()):
         IP = inputIP.get()
-        machine, version = get_machine(IP)
-        labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, version))
-        threading.Timer(1.0, update_services).start()
-        if "RSR 100" in machine:
-            dropdown1['values'] = mux_MF
-            dropdown2['values'] = ["Profilo Unico"]
+        if is_pingable(IP):
+            machine, version = get_machine(IP)
+            labelInfoDesc.config(text = "Modello: {}\nVersione firmware: {}".format(machine, version))
+            threading.Timer(1.0, update_services).start()
+            if "RSR 100" in machine:
+                dropdown1['values'] = mux_MF
+                dropdown2['values'] = ["Profilo Unico"]
+            else:
+                dropdown1['values'] = mux_DVBT
+                dropdown2['values'] = ["Profile 1", "Profile 2", "Profile 3"]
+            updating = not updating
+            if updating:
+                buttonConnect.config(text = "Disconnetti")
+                labelStatus.config(text = "Connessione in corso...")
+                inputIP.config(state='readonly')
+                inputIP.config(bg='lightgray', fg='gray')
+                update_status(fast_mode=True)
+                threading.Thread(target=update_status).start()
+            else:
+                buttonConnect.config(text = "Connetti")
+                inputIP.config(state='normal')
+                inputIP.config(bg='white', fg='black')
+                labelBitrate.config(text = "")
+                labelStatus.config(text = "")
+                labelInfoDesc.config(text = "")
+                labelServices.config(text = "")
         else:
-            dropdown1['values'] = mux_DVBT
-            dropdown2['values'] = ["Profile 1", "Profile 2", "Profile 3"]
-        updating = not updating
-        if updating:
-            buttonConnect.config(text = "Disconnetti")
-            labelStatus.config(text = "Connessione in corso...")
-            inputIP.config(state='readonly')
-            inputIP.config(bg='lightgray', fg='gray')
-            update_status(fast_mode=True)
-            threading.Thread(target=update_status).start()
-        else:
-            buttonConnect.config(text = "Connetti")
-            inputIP.config(state='normal')
-            inputIP.config(bg='white', fg='black')
-            labelBitrate.config(text = "")
-            labelStatus.config(text = "")
-            labelInfoDesc.config(text = "")
-            labelServices.config(text = "")
+            labelBitrate.config(text = "Non raggiungibile", fg = "red")
+            labelStatus.config(text = "Verifica la connessione o l'IP inserito")
     else:
         labelBitrate.config(text = "Indirizzo non valido", fg = "orange")
         labelStatus.config(text = "")
@@ -655,7 +673,7 @@ labelSettingsDesc = tk.Label(frame2, text="Seleziona servizi e profili:", anchor
 labelSettingsDesc.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
 # Create the first drop down menu
-options1 = mux_list
+options1 = []
 dropdown1 = ttk.Combobox(frame2, values=options1)
 dropdown1.grid(row=2, column=0, padx=5)
 
