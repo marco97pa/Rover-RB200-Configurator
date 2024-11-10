@@ -189,6 +189,7 @@ def get_snmp_data(ip_address):
                 elif name == "SNR":
                     value = str( float(value)/10 ) + " dB"
                 elif name == "Bitrate":
+                    print(value)
                     value = str( float(value)/1000000 ) + " Mb/s"
 
                 results[name] = value
@@ -265,6 +266,30 @@ def get_service_audio(ip_address):
                     result = value
 
     return result
+
+def set_radio_service(ip_address, service):
+    community = 'private'  # Replace with your SNMP community string
+    oid = ".1.3.6.1.4.1.19324.2.3.8.3.2.0"
+    value = Integer(str(service))
+
+    errorIndication, errorStatus, errorIndex, varBinds = next(
+        setCmd(SnmpEngine(),
+               CommunityData(community),
+               UdpTransportTarget((ip_address, 161)),
+               ContextData(),
+               ObjectType(ObjectIdentity(oid), value))
+    )
+
+    if errorIndication:
+        print( str(errorIndication) )
+    elif errorStatus:
+       print( '%s at %s' % (errorStatus.prettyPrint(),
+                               errorIndex and varBinds[int(errorIndex) - 1][0] or '?') )
+    else:
+        print("Service {} set successfully".format(service))
+        label2.config(text="Impostato {}".format(radio_services[service]))
+
+
 
 def get_machine(ip_address):
     community = 'public'  # Replace with your SNMP community string
@@ -472,8 +497,6 @@ def set_RX(IP, ol, freq, pol, symb, profile):
             print("OK: Device not responding, probably rebooting")
             break
 
-def set_radio_service(ip, service):
-    print(service)
 
 def is_valid_ip(ip):
     # Regular expression for validating an IPv4 address
@@ -640,12 +663,11 @@ def set_parameters():
             set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, 0)
             for number, name in radio_services.items():
                 if name == profile:
-                    set_radio_service(IP, number)
+                    threading.Timer(20.0, set_radio_service(IP, number)).start()
         else:
             nprofile = profile.split()[1]
             set_RX(IP, mux.ol, mux.freq, mux.pol, mux.symb, nprofile)
-        
-        label2.config(text=f"Impostato {service} su {profile}")
+            label2.config(text=f"Impostato {service} su {profile}")
         labelBitrate.config(text = "...")
         labelStatus.config(text = "...")
         labelServices.config(text = "...")
