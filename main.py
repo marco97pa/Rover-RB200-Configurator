@@ -19,7 +19,7 @@ if platform.system() == "Windows":
     from win10toast_click import ToastNotifier
 
 # COSTANTI
-VERSION = "2.0"  # Numero versione
+VERSION = "2.1"  # Numero versione
 owner = "marco97pa"  # Username del proprietario del repository su GitHub
 repo = "Rover-RXSAT-Configurator"  # Nome repository su GitHub
 
@@ -115,7 +115,7 @@ def show_version_info():
     Label(dialog, text="Realizzato da Marco Fantauzzo, Salvatore Chillura e Giovanni Gaetani").pack(pady=5)
 
     # Load and display the image
-    image_path = "logo.png"
+    image_path = resource_path("logo.png")
     image = Image.open(image_path)
 
     # Calculate the new size while maintaining the aspect ratio
@@ -521,6 +521,16 @@ def is_valid_ip(ip):
         return True
     else:
         return False
+    
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 def on_closing():
     # Gracefully close
@@ -539,7 +549,7 @@ def on_startup():
                 toaster.show_toast(
                     "Nuovo aggiornamento disponibile",
                     "Clicca per scaricare la nuova versione e sostituiscila alla precedente",
-                    icon_path="icon.ico",  # You can specify an icon here
+                    icon_path=resource_path("icon.ico"),  # You can specify an icon here
                     duration=10,
                     threaded=True,
                     callback_on_click=lambda: update_app(latest_url)
@@ -550,10 +560,8 @@ threading.Thread(target=on_startup()).start()
 root = tk.Tk()
 root.title("ROVER RX SAT Configurator - ver. " + VERSION)
 root.protocol("WM_DELETE_WINDOW", on_closing)
-if getattr(sys, 'frozen', False):
-    root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
-else:
-    root.iconbitmap("icon.ico") 
+icon_path = resource_path("icon.ico")
+root.iconbitmap(icon_path) 
 
 # Function to launch webpage
 def webpage():
