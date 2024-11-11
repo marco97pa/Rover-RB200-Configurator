@@ -1,6 +1,3 @@
-# COSE DA FARE:
-# - Selezionare audio MF nel metodo set_radio_service
-
 import requests
 from http.client import RemoteDisconnected
 from urllib3.exceptions import ProtocolError
@@ -19,15 +16,22 @@ import threading
 import subprocess
 import platform
 
+# COSTANTI
+VERSION = "1.9"  # Numero versione
+owner = "marco97pa"  # Username del proprietario del repository su GitHub
+repo = "Rover-RB200-Configurator"  # Nome repository su GitHub
 
-VERSION = "1.9"
-owner = "marco97pa"  # Repository owner's username
-repo = "Rover-RB200-Configurator"  # Repository name
+# FLAGS: inizializzazione
+updating = False  # Indica se è abilitato l'aggiornamento dei valori, non appena viene stabilita la connessione
+machine = ""  # Nome del modello dell'apparato connesso
 
-# Initialize the flags
-updating = False
-machine = ""
-
+# Classe MUX
+#   Definisce l'oggetto MUX
+#   ol:     Oscillatore Locale
+#   pol:    Polarizzazione (HH, VH, HL, VL)
+#   freq:   Frequenza in MHz
+#   symb:   Symbol rate
+#   ISI:    ISI
 class MUX:
     def __init__(self, name, ol, pol, freq, symb, ISI):
         self.name = name
@@ -40,17 +44,18 @@ class MUX:
     def __str__(self):
         return f"ol: {self.ol}, pol: {self.pol}, freq: {self.freq}, symb: {self.symb}, ISI: {self.ISI}"
 
-# Creazione dell'oggetto con i valori specificati
+# Creazione degli oggetti MUX con i transponder Rai Way
 muxR = MUX("MUX MR10", "10600", "HH", "12535.500", "35294", "4")
 muxA = MUX("MUX A", "10600", "VH", "12606.000", "35294", "4")
 muxB = MUX("MUX B", "10600", "VH", "12606.000", "35294", "5")
 muxMF = MUX("Servizi MF", "10600", "HH", "12627.000", "35294", "2")
 
-# Lista di oggetti MUX
+# Liste di oggetti MUX
 mux_list = [muxR, muxA, muxB, muxMF]
 mux_DVBT = [muxR.name, muxA.name, muxB.name]
 mux_MF = [muxMF.name]
 
+# Lista servizi Radio: Service Description Table
 radio_services = {
     14: "Rai Radio1 PA",
     27: "Rai Radio 2",
@@ -60,21 +65,24 @@ radio_services = {
     24: "Rai Radio 1"
 }	
 
-# Funzione per cercare un MUX per nome
+# Ricerca un MUX per nome
+#   Restistuisce il MUX (oggetto)
 def search_mux_by_name(name):
     for mux in mux_list:
         if mux.name == name:
             return mux
     return None
 
-# Funzione per cercare un MUX per frequenza e ISI
+# Ricerca un MUX per frequenza e ISI
+#   Restistuisce il nome del MUX (stringa)
 def search_mux_by_freq_and_ISI(freq, ISI):
     for mux in mux_list:
         if str( float(mux.freq) ) + " MHz" == freq and mux.ISI == ISI:
             return mux.name
     return "NON RICONOSCIUTO"
 
-# Function to get the latest release version from GitHub
+# Ottiene la versione dell'ultima release del programma da GitHub
+#   Restituisce il nome versione e l'URL per scaricarla
 def get_latest_release_version(owner, repo):
     url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
     try:
@@ -88,44 +96,43 @@ def get_latest_release_version(owner, repo):
         print(f"An error occurred: {err}")
         return None, None
     
-# Function to show the custom alert with version information
+# Mostra finestra informazioni sul programma
 def show_version_info():
     current_version = VERSION
     latest_version, latest_url = get_latest_release_version(owner, repo) 
 
     if latest_version:
         update_button_state = tk.NORMAL if current_version != latest_version else tk.DISABLED
-
-        # Create a custom dialog window
-        dialog = Toplevel(root)
-        dialog.title("Informazioni")
-
-        Label(dialog, text="Realizzato da Marco Fantauzzo, Salvatore Chillura e Giovanni Gaetani").pack(pady=5)
-
-        # Load and display the image
-        image_url = "https://www.raiway.it/static/media/logo.74640e43.png"  # Logo Rai Way dal sito
-        image = Image.open(requests.get(image_url, stream=True).raw)
-
-        # Calculate the new size while maintaining the aspect ratio
-        max_size = (100, 100)
-        image.thumbnail(max_size, Image.LANCZOS)
-        photo = ImageTk.PhotoImage(image)
-
-        image_label = Label(dialog, image=photo)
-        image_label.image = photo  # Keep a reference to avoid garbage collection
-        image_label.pack(pady=5)
-
-        Label(dialog, text="Versione installata:").pack(pady=5)
-        Label(dialog, text=current_version).pack(pady=5)
-        Label(dialog, text="Ultima versione:").pack(pady=5)
-        Label(dialog, text=latest_version).pack(pady=5)
-
-        update_button = Button(dialog, text="Aggiorna", state=update_button_state, command=lambda: update_app(latest_url))
-        update_button.pack(pady=10)
-
-        Button(dialog, text="Chiudi", command=dialog.destroy).pack(pady=5)
     else:
-        messagebox.showerror("Errore", "Non sei connesso a Internet, riprova")
+        latest_version = "Non sei connesso a Internet, riprova"
+
+    # Create a custom dialog window
+    dialog = Toplevel(root)
+    dialog.title("Informazioni")
+
+    Label(dialog, text="Realizzato da Marco Fantauzzo, Salvatore Chillura e Giovanni Gaetani").pack(pady=5)
+
+    # Load and display the image
+    image_path = "logo.png"
+    image = Image.open(image_path)
+
+    # Calculate the new size while maintaining the aspect ratio
+    max_size = (100, 100)
+    image.thumbnail(max_size, Image.LANCZOS)
+    photo = ImageTk.PhotoImage(image)
+
+    image_label = Label(dialog, image=photo)
+    image_label.image = photo  # Keep a reference to avoid garbage collection
+    image_label.pack(pady=5)
+
+    Label(dialog, text="Versione installata:").pack(pady=5)
+    Label(dialog, text=current_version).pack(pady=5)
+    Label(dialog, text="Ultima versione:").pack(pady=5)
+    Label(dialog, text=latest_version).pack(pady=5)
+
+    update_button = Button(dialog, text="Aggiorna", state=update_button_state, command=lambda: update_app(latest_url))
+    update_button.pack(pady=10)
+    
 
 # Function to handle the update action
 def update_app(latest_url):
@@ -189,7 +196,7 @@ def get_snmp_data(ip_address):
                 elif name == "SNR":
                     value = str( float(value)/10 ) + " dB"
                 elif name == "Bitrate":
-                    print(value)
+                    # print("Raw bitrate {}".format(value))
                     value = str( float(value)/1000000 ) + " Mb/s"
 
                 results[name] = value
