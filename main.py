@@ -15,11 +15,13 @@ from pysnmp.hlapi import *
 import threading
 import subprocess
 import platform
+if platform.system() == "Windows":
+    from win10toast_click import ToastNotifier
 
 # COSTANTI
-VERSION = "1.9"  # Numero versione
+VERSION = "2.0"  # Numero versione
 owner = "marco97pa"  # Username del proprietario del repository su GitHub
-repo = "Rover-RB200-Configurator"  # Nome repository su GitHub
+repo = "Rover-RXSAT-Configurator"  # Nome repository su GitHub
 
 # FLAGS: inizializzazione
 updating = False  # Indica se è abilitato l'aggiornamento dei valori, non appena viene stabilita la connessione
@@ -528,9 +530,25 @@ def on_closing():
     root.destroy()
     root.after(100, os._exit, 0)  # Delay the exit slightly
 
+def on_startup():
+    if platform.system() == "Windows":
+        latest_version, latest_url = get_latest_release_version(owner, repo)
+        if latest_version:
+            if latest_version != VERSION:
+                toaster = ToastNotifier()
+                toaster.show_toast(
+                    "Nuovo aggiornamento disponibile",
+                    "Clicca per scaricare la nuova versione e sostituiscila alla precedente",
+                    icon_path="icon.ico",  # You can specify an icon here
+                    duration=10,
+                    threaded=True,
+                    callback_on_click=lambda: update_app(latest_url)
+                )
+
+threading.Thread(target=on_startup()).start()
 # Create the main window
 root = tk.Tk()
-root.title("ROVER Configurator - ver. " + VERSION)
+root.title("ROVER RX SAT Configurator - ver. " + VERSION)
 root.protocol("WM_DELETE_WINDOW", on_closing)
 if getattr(sys, 'frozen', False):
     root.iconbitmap(os.path.join(sys._MEIPASS, "icon.ico"))
@@ -564,14 +582,14 @@ def update_status(fast_mode = False):
     while updating:
         IP = inputIP.get()
         bitrate, freq, level, snr, isi = get_status(IP)
-        labelBitrate.config(text = "Bitrate:\t{}".format(bitrate) )
+        labelBitrate.config(text = "Bitrate:\t\t{}".format(bitrate) )
         if check_bitrate( bitrate ):
             labelBitrate.config(fg = "green")
         else:
             labelBitrate.config(fg = "red")
 
         if level != "":
-            labelStatus.config(text = "Freq.:\t{} (ISI {})\nMUX rilevato:\t{}\nLivello:\t{}\nSNR:\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), level, snr) )
+            labelStatus.config(text = "Frequenza:\t{} (ISI {})\nMUX rilevato:\t{}\nLivello:\t\t{}\nSNR:\t\t{}".format(freq, isi, search_mux_by_freq_and_ISI(freq, isi), level, snr) )
         
         # Questa riga serve a evitare che i "late threads" scrivere a disconnessione avvenuta
         if not updating:
@@ -711,11 +729,11 @@ labelStatusT = tk.Label(frame1, text="Stato", anchor="w", font=("Helvetica", 12,
 labelStatusT.grid(row=1, column=0, pady=5, sticky="w")
 
 # Create a label below the input text field and button
-labelBitrate = tk.Label(frame1, text=" ")
+labelBitrate = tk.Label(frame1, anchor="w", justify="left", text=" ")
 labelBitrate.grid(row=2, column=0, pady=5, columnspan=4, sticky="ew")
 
 # Create a label below the input text field and button
-labelStatus = tk.Label(frame1, text=" ")
+labelStatus = tk.Label(frame1, anchor="w", justify="left", text=" ")
 labelStatus.grid(row=3, column=0, pady=5, columnspan=4, sticky="ew")
 
 # Create a label below the input text field and button
