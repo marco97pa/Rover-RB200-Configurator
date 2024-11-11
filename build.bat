@@ -1,1 +1,1 @@
-pyinstaller --clean -y -n "Rover RX SAT Configurator1" --add-data=".\logo.png;." --add-data=".\icon.ico;." --icon=".\icon.ico" --onefile --noconsole --windowed .\main.py
+pyinstaller --clean -y -n "Rover RX SAT Configurator" --add-data=".\logo.png;." --add-data=".\icon.ico;." --icon=".\icon.ico" --onefile --noconsole --windowed .\main.py
