@@ -15,8 +15,14 @@ from pysnmp.hlapi import *
 import threading
 import subprocess
 import platform
+
 if platform.system() == "Windows":
     from win10toast_click import ToastNotifier
+
+if sys.platform == "win32":
+    creationflags = subprocess.CREATE_NO_WINDOW
+else:
+    creationflags = 0
 
 # COSTANTI
 VERSION = "2.1"  # Numero versione
@@ -149,7 +155,7 @@ def is_pingable(ip):
     
     try:
         # Use the ping command to check if the IP is reachable
-        output = subprocess.run(["ping", param, "1", ip], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = subprocess.run(["ping", param, "1", ip], stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=creationflags)
         # Check the return code. If it's 0, the IP is reachable
         return output.returncode == 0
     except Exception as e:
