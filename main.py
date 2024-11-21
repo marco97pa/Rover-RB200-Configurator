@@ -25,7 +25,7 @@ else:
     creationflags = 0
 
 # COSTANTI
-VERSION = "2.1"  # Numero versione
+VERSION = "2.2"  # Numero versione
 owner = "marco97pa"  # Username del proprietario del repository su GitHub
 repo = "Rover-RXSAT-Configurator"  # Nome repository su GitHub
 
